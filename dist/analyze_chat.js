@@ -1,7 +1,5 @@
 "use strict";
 // 브라우저용 카카오톡 채팅 통계 분석기
-// analyze_chat.ts의 모든 함수를 포함하되, fs 모듈 제거
-// analyze_chat.ts의 모든 함수들을 여기에 복사 (fs, path 제거)
 // 간단화를 위해 핵심 함수들만 포함
 function parseChatMessage(match, fullText, startIndex, nextStartIndex) {
     const fullLine = match[0];
@@ -149,9 +147,20 @@ function analyzeChat(content, startDate, endDate, keywords) {
     const exclamationExpressions = new Map();
     const messagesByTimeSlot = new Map();
     const messageLengthByParticipantDetail = new Map();
+    // 참여자 간 상호작용 (멘션 관계도)
+    const mentionRelations = new Map();
+    // 메시지 타임라인 히트맵
+    const messagesByMonth = new Map();
+    const messagesByWeek = new Map();
+    // 대화 참여도 변화 추이
+    const participantsByMonth = new Map();
+    const participantFirstMessage = new Map();
+    const participantLastMessage = new Map();
+    const participantActiveDates = new Map();
     // 기본 키워드 또는 전달받은 키워드 사용
     const defaultKeywords = [
-        '벙', '정모', '술', '맛집', '공연', '연습', '밴드', '음악', '노래', '라이브'
+        '벙', '정모', '술', '맛집', '공연', '연습', '밴드', '음악', '노래',
+        '라이브', '락교'
     ];
     const keywordsToUse = keywords && keywords.length > 0 ? keywords : defaultKeywords;
     for (const keyword of keywordsToUse) {
@@ -185,6 +194,36 @@ function analyzeChat(content, startDate, endDate, keywords) {
         messagesByParticipant.set(message.name, participantCount + 1);
         const dateCount = messagesByDate.get(message.date) || 0;
         messagesByDate.set(message.date, dateCount + 1);
+        // 메시지 타임라인 히트맵 (월별)
+        const messageDate = message.timestamp;
+        const monthKey = `${messageDate.getFullYear()}년 ${messageDate.getMonth() + 1}월`;
+        const monthCount = messagesByMonth.get(monthKey) || 0;
+        messagesByMonth.set(monthKey, monthCount + 1);
+        // 메시지 타임라인 히트맵 (주간별)
+        const weekStart = new Date(messageDate);
+        weekStart.setDate(messageDate.getDate() - messageDate.getDay());
+        const weekKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+        const weekCount = messagesByWeek.get(weekKey) || 0;
+        messagesByWeek.set(weekKey, weekCount + 1);
+        // 대화 참여도 변화 추이 (월별 참여자)
+        if (!participantsByMonth.has(monthKey)) {
+            participantsByMonth.set(monthKey, new Set());
+        }
+        participantsByMonth.get(monthKey).add(message.name);
+        // 참여자별 첫/마지막 메시지 날짜
+        if (!participantFirstMessage.has(message.name) ||
+            message.timestamp < participantFirstMessage.get(message.name)) {
+            participantFirstMessage.set(message.name, message.timestamp);
+        }
+        if (!participantLastMessage.has(message.name) ||
+            message.timestamp > participantLastMessage.get(message.name)) {
+            participantLastMessage.set(message.name, message.timestamp);
+        }
+        // 참여자별 실제 활동한 날짜 (날짜 문자열로 저장)
+        if (!participantActiveDates.has(message.name)) {
+            participantActiveDates.set(message.name, new Set());
+        }
+        participantActiveDates.get(message.name).add(message.date);
         let hour = parseHour(message.time);
         if (hour >= 0) {
             const hourCount = messagesByHour.get(hour) || 0;
@@ -199,6 +238,13 @@ function analyzeChat(content, startDate, endDate, keywords) {
         for (const mentionedName of mentionedNames) {
             const mentionCount = mentionsByParticipant.get(mentionedName) || 0;
             mentionsByParticipant.set(mentionedName, mentionCount + 1);
+            // 참여자 간 상호작용 (멘션 관계도)
+            if (!mentionRelations.has(message.name)) {
+                mentionRelations.set(message.name, new Map());
+            }
+            const relationMap = mentionRelations.get(message.name);
+            const relationCount = relationMap.get(mentionedName) || 0;
+            relationMap.set(mentionedName, relationCount + 1);
         }
         const cryingCount = countCryingExpressions(message.message);
         if (cryingCount > 0) {
@@ -580,6 +626,56 @@ function analyzeChat(content, startDate, endDate, keywords) {
             };
         }
     }
+    // 참여자 간 상호작용 (멘션 관계도) Top 30
+    const participantInteractions = [];
+    for (const [from, toMap] of mentionRelations.entries()) {
+        for (const [to, count] of toMap.entries()) {
+            participantInteractions.push({ from, to, count });
+        }
+    }
+    participantInteractions.sort((a, b) => b.count - a.count);
+    const topInteractions = participantInteractions.slice(0, 30);
+    // 메시지 타임라인 히트맵
+    const timelineByMonth = Array.from(messagesByMonth.entries())
+        .map(([month, count]) => ({ month, count }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+    const timelineByWeek = Array.from(messagesByWeek.entries())
+        .map(([weekKey, count]) => {
+        const date = new Date(weekKey);
+        return {
+            week: `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 주`,
+            count,
+            sortKey: weekKey
+        };
+    })
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+        .map(({ week, count }) => ({ week, count }));
+    // 대화 참여도 변화 추이
+    const monthlyParticipants = Array.from(participantsByMonth.entries())
+        .map(([month, participants]) => ({ month, count: participants.size }))
+        .sort((a, b) => {
+        // "2024년 1월" 형식을 파싱하여 시간순 정렬
+        const parseMonth = (monthStr) => {
+            const match = monthStr.match(/(\d+)년\s*(\d+)월/);
+            if (match) {
+                return parseInt(match[1]) * 12 + parseInt(match[2]);
+            }
+            return 0;
+        };
+        return parseMonth(a.month) - parseMonth(b.month);
+    });
+    const participantActivityPeriod = Array.from(participantFirstMessage.keys())
+        .map(name => {
+        // 실제로 메시지를 보낸 날짜만 카운트
+        const activeDates = participantActiveDates.get(name) || new Set();
+        const daysActive = activeDates.size;
+        return {
+            name,
+            daysActive
+        };
+    })
+        .sort((a, b) => b.daysActive - a.daysActive)
+        .slice(0, 20);
     // 날짜 범위 계산 (필터링 전 모든 메시지)
     // 전체 메시지를 파싱하여 날짜 범위 계산 (첫 분석 시에만 필요)
     let minDate = null;
@@ -649,7 +745,10 @@ function analyzeChat(content, startDate, endDate, keywords) {
                 longestGap,
                 activeDays,
                 totalDays
-            }
+            },
+            participantInteractions: topInteractions,
+            timelineHeatmap: { byMonth: timelineByMonth, byWeek: timelineByWeek },
+            participationTrend: { monthlyParticipants, participantActivityPeriod }
         },
         allMessages: allMessagesForRange,
         dateRange: { min: minDate || new Date(), max: maxDate || new Date() }
@@ -1238,6 +1337,161 @@ function renderStatistics(stats) {
         }
         html += `</div>`;
     }
+    // 참여자 간 상호작용
+    if (stats.participantInteractions.length > 0) {
+        html += `
+    <div class="stat-section">
+      <h2>🤝 참여자 간 상호작용 (멘션 관계도 Top 30)</h2>
+      <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+        누가 누구를 가장 많이 멘션했는지 보여줍니다.
+      </p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th>멘션한 사람</th>
+              <th>멘션당한 사람</th>
+              <th>멘션 횟수</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+        stats.participantInteractions.forEach((interaction, index) => {
+            html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${interaction.from}</td>
+        <td class="name">${interaction.to}</td>
+        <td class="count">${interaction.count.toLocaleString()}회</td>
+      </tr>
+    `;
+        });
+        html += `
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+    }
+    // 메시지 타임라인 히트맵
+    html += `
+    <div class="stat-section">
+      <h2>📅 메시지 타임라인 히트맵</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h3 style="margin-bottom: 15px;">월별 메시지 수</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>월</th>
+                  <th>메시지 수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+    stats.timelineHeatmap.byMonth.forEach((item) => {
+        html += `
+      <tr>
+        <td class="name">${item.month}</td>
+        <td class="count">${item.count.toLocaleString()}개</td>
+      </tr>
+    `;
+    });
+    html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 15px;">주간별 메시지 수</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>주</th>
+                  <th>메시지 수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+    stats.timelineHeatmap.byWeek.forEach((item) => {
+        html += `
+      <tr>
+        <td class="name">${item.week}</td>
+        <td class="count">${item.count.toLocaleString()}개</td>
+      </tr>
+    `;
+    });
+    html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+    // 대화 참여도 변화 추이
+    html += `
+    <div class="stat-section">
+      <h2>📈 대화 참여도 변화 추이</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h3 style="margin-bottom: 15px;">월별 참여자 수</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>월</th>
+                  <th>참여자 수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+    stats.participationTrend.monthlyParticipants.forEach((item) => {
+        html += `
+      <tr>
+        <td class="name">${item.month}</td>
+        <td class="count">${item.count}명</td>
+      </tr>
+    `;
+    });
+    html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 15px;">참여자별 활동 기간 (Top 20)</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>활동 기간</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+    stats.participationTrend.participantActivityPeriod.forEach((participant, index) => {
+        html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${participant.name}</td>
+        <td class="count">${participant.daysActive}일</td>
+      </tr>
+    `;
+    });
+    html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
     return html;
 }
 // 파일 업로드 및 처리
@@ -1360,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentValue = keywordsInput.value || keywordsInput.textContent || '';
                 if (!currentValue.trim()) {
                     keywordsInput.value =
-                        '벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브';
+                        '벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브, 락교';
                 }
             }
             else {
@@ -1379,7 +1633,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 파일 선택 전에 입력된 키워드가 있으면 그것을 사용, 없으면 기본값 사용
             const initialKeywordsValue = keywordsInput && keywordsInput.value.trim() ?
                 keywordsInput.value.trim() :
-                '벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브';
+                '벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브, 락교';
             // 결과 렌더링 함수
             const updateStatistics = () => {
                 console.log('필터 적용 시작');

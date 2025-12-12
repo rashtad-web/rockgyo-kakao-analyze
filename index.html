@@ -53,6 +53,40 @@
       gap: 10px;
     }
 
+    .github-button {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 40px;
+      height: 40px;
+      padding: 6px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+
+    .github-button img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      filter: brightness(0) invert(1);
+    }
+
+    .github-button:hover {
+      background: rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.7);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
     .youtube-button,
     .instagram-button,
     .threads-button {
@@ -375,6 +409,9 @@
 <body>
   <div class="container">
     <div class="header">
+      <a href="https://github.com/rashtad-web/rockgyo-kakao-analyze" target="_blank" rel="noopener noreferrer" class="github-button">
+        <img src="images/github-mark.svg" alt="GitHub Repository" />
+      </a>
       <div class="social-buttons">
         <a href="https://www.instagram.com/rockgyo_community/" target="_blank" rel="noopener noreferrer" class="instagram-button">
           <img src="images/Instagram_Logo.svg" alt="RockGyo Instagram" />
@@ -386,7 +423,7 @@
           <img src="images/Youtube_logo.png" alt="RockGyo Youtube" />
         </a>
       </div>
-      <h1>💬 카카오톡 채팅 통계 분석기 v1.1</h1>
+      <h1>💬 카카오톡 채팅 통계 분석기 v1.2</h1>
       <p>카카오톡 채팅 내보내기 파일을 업로드하여 통계를 확인하세요</p>
     </div>
 
@@ -431,8 +468,8 @@
             <div>
               <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #333; font-size: 0.9em;">키워드 목록 (쉼표로 구분)</label>
               <textarea id="keywordsInput"
-                        placeholder="예: 벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브"
-                        style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e0e0e0; font-size: 0.95em; min-height: 120px; resize: vertical; font-family: inherit; background-color: white;">벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브</textarea>
+                        placeholder="예: 벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브, 락교"
+                        style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e0e0e0; font-size: 0.95em; min-height: 120px; resize: vertical; font-family: inherit; background-color: white;">벙, 정모, 술, 맛집, 공연, 연습, 밴드, 음악, 노래, 라이브, 락교</textarea>
               <div style="margin-top: 8px; font-size: 0.8em; color: #666;">
                 키워드는 쉼표(,)로 구분하여 입력하세요.
               </div>
@@ -462,7 +499,7 @@
     <div class="results" id="results"></div>
   </div>
 
-  <script type="module" src="dist/analyze_chat.js?v=1765565944602"></script>
+  <script type="module" src="dist/analyze_chat.js?v=1765567348160"></script>
 </body>
 </html>
 
