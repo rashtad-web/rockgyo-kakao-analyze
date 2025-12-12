@@ -45,10 +45,18 @@
       font-size: 1.1em;
     }
 
-    .youtube-button {
+    .social-buttons {
       position: absolute;
       top: 20px;
       right: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .youtube-button,
+    .instagram-button {
+      width: 48px;
+      height: 48px;
       padding: 8px;
       background: rgba(255, 255, 255, 0.1);
       border: 2px solid rgba(255, 255, 255, 0.3);
@@ -56,17 +64,22 @@
       cursor: pointer;
       transition: all 0.3s;
       text-decoration: none;
-      display: inline-block;
-      line-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
     }
 
-    .youtube-button img {
-      height: 32px;
-      width: auto;
+    .youtube-button img,
+    .instagram-button img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
       display: block;
     }
 
-    .youtube-button:hover {
+    .youtube-button:hover,
+    .instagram-button:hover {
       background: rgba(255, 255, 255, 0.2);
       border-color: rgba(255, 255, 255, 0.6);
       transform: translateY(-2px);
@@ -345,9 +358,14 @@
 <body>
   <div class="container">
     <div class="header">
-      <a href="https://www.youtube.com/@Rock-Gyo" target="_blank" rel="noopener noreferrer" class="youtube-button">
-        <img src="images/Youtube_logo.png" alt="RockGyo Youtube" />
-      </a>
+      <div class="social-buttons">
+        <a href="https://www.instagram.com/rockgyo_community/" target="_blank" rel="noopener noreferrer" class="instagram-button">
+          <img src="images/Instagram_Logo.svg" alt="RockGyo Instagram" />
+        </a>
+        <a href="https://www.youtube.com/@Rock-Gyo" target="_blank" rel="noopener noreferrer" class="youtube-button">
+          <img src="images/Youtube_logo.png" alt="RockGyo Youtube" />
+        </a>
+      </div>
       <h1>💬 카카오톡 채팅 통계 분석기 v1.1</h1>
       <p>카카오톡 채팅 내보내기 파일을 업로드하여 통계를 확인하세요</p>
     </div>
@@ -424,7 +442,7 @@
     <div class="results" id="results"></div>
   </div>
 
-  <script type="module" src="dist/analyze_chat.js?v=1765564910091"></script>
+  <script type="module" src="dist/analyze_chat.js?v=1765565217825"></script>
 </body>
 </html>
 
