@@ -615,14 +615,14 @@ function analyzeChat(
     }
   }
 
-  // 대화 종료자 계산 (메시지 후 24시간 동안 아무도 메시지를 보내지 않으면 종료)
-  const CONVERSATION_END_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24시간
+  // 대화 종료자 계산 (메시지 후 6시간 동안 아무도 메시지를 보내지 않으면 종료)
+  const CONVERSATION_END_THRESHOLD_MS = 6 * 60 * 60 * 1000;  // 6시간
   for (let i = 0; i < messages.length; i++) {
     const currentMessage = messages[i];
     const currentTime = currentMessage.timestamp;
     let isEnd = true;
 
-    // 다음 메시지가 24시간 이내에 있으면 종료가 아님
+    // 다음 메시지가 6시간 이내에 있으면 종료가 아님
     for (let j = i + 1; j < messages.length; j++) {
       const nextMessage = messages[j];
       const timeDiff = nextMessage.timestamp.getTime() - currentTime.getTime();
@@ -630,7 +630,7 @@ function analyzeChat(
         isEnd = false;
         break;
       }
-      // 24시간을 넘어가면 더 이상 확인할 필요 없음
+      // 6시간을 넘어가면 더 이상 확인할 필요 없음
       if (timeDiff > CONVERSATION_END_THRESHOLD_MS) {
         break;
       }
@@ -1092,7 +1092,7 @@ function renderStatistics(stats: Statistics): string {
         <div>
           <h3 style="margin-bottom: 10px; color: #FF9800;">🏁 대화 종료자</h3>
           <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
-            메시지 후 24시간 동안 아무도 메시지를 보내지 않아 대화를 종료한 사람입니다.
+            메시지 후 6시간 동안 아무도 메시지를 보내지 않아 대화를 종료한 사람입니다.
           </p>
           <div class="table-container">
             <table>
