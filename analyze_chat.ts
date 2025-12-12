@@ -30,8 +30,6 @@ interface Statistics {
   topMentioned: Array<{name: string; count: number}>;
   topCrying: Array<{name: string; count: number}>;
   topLaughing: Array<{name: string; count: number}>;
-  longestMessage: {name: string; message: string; length: number};
-  shortestMessage: {name: string; message: string; length: number};
   avgMessageLengthByParticipant: Array<{name: string; avgLength: number}>;
   topWords: Array<{word: string; count: number}>;
   lateNightParticipants: Array<{name: string; count: number}>;
@@ -40,6 +38,32 @@ interface Statistics {
   videoSharing: Array<{name: string; count: number}>;
   linkSharing: Array<{name: string; count: number}>;
   keywordMentions: Map<string, Array<{name: string; count: number}>>;
+  // 새로 추가된 통계
+  conversationStarters: Array<{name: string; count: number}>;
+  conversationEnders: Array<{name: string; count: number}>;
+  emotionAnalysis: {
+    positive: Array<{name: string; count: number}>;
+    negative: Array<{name: string; count: number}>;
+    questions: Array<{name: string; count: number}>;
+    exclamations: Array<{name: string; count: number}>;
+  };
+  activityByTimeSlot: Array<{slot: string; count: number; percentage: number}>;
+  messageLengthPattern: {
+    oneLine: number; short: number; medium: number; long: number;
+    veryLong: number;
+    byParticipant: Array<{
+      name: string; oneLine: number; short: number; medium: number;
+      long: number;
+      veryLong: number
+    }>;
+  };
+  conversationDensity: {
+    avgMessagesPerDay: number; mostActiveDay: {date: string; count: number};
+    quietestDay: {date: string; count: number};
+    longestGap: {days: number; startDate: string; endDate: string};
+    activeDays: number;
+    totalDays: number;
+  };
 }
 
 // analyze_chat.ts의 모든 함수들을 여기에 복사 (fs, path 제거)
@@ -211,11 +235,6 @@ function analyzeChat(
   const cryingByParticipant = new Map<string, number>();
   const laughingByParticipant = new Map<string, number>();
 
-  let longestMessage: {name: string; message: string;
-                       length: number} = {name: '', message: '', length: 0};
-  let shortestMessage: {
-    name: string; message: string; length: number
-  } = {name: '', message: '', length: Infinity};
   const messageLengthByParticipant = new Map < string, {
     total: number;
     count: number
@@ -227,6 +246,23 @@ function analyzeChat(
   const videoCount = new Map<string, number>();
   const linkCount = new Map<string, number>();
   const keywordMentions = new Map<string, Map<string, number>>();
+
+  // 새로 추가된 통계를 위한 변수
+  const conversationStartersCount = new Map<string, number>();
+  const conversationEndersCount = new Map<string, number>();
+  const positiveExpressions = new Map<string, number>();
+  const negativeExpressions = new Map<string, number>();
+  const questionExpressions = new Map<string, number>();
+  const exclamationExpressions = new Map<string, number>();
+  const messagesByTimeSlot = new Map<string, number>();
+  const messageLengthByParticipantDetail = new Map < string, {
+    oneLine: number;
+    short: number;
+    medium: number;
+    long: number;
+    veryLong: number;
+  }
+  >();
 
   // 기본 키워드 또는 전달받은 키워드 사용
   const defaultKeywords = [
@@ -308,22 +344,6 @@ function analyzeChat(
     }
 
     const msgLength = message.message.length;
-    if (msgLength > longestMessage.length) {
-      longestMessage = {
-        name: message.name,
-        message: message.message.substring(0, 200) +
-            (message.message.length > 200 ? '...' : ''),
-        length: msgLength
-      };
-    }
-    if (msgLength > 0 && msgLength < shortestMessage.length) {
-      shortestMessage = {
-        name: message.name,
-        message: message.message,
-        length: msgLength
-      };
-    }
-
     const lengthData =
         messageLengthByParticipant.get(message.name) || {total: 0, count: 0};
     lengthData.total += msgLength;
@@ -374,7 +394,103 @@ function analyzeChat(
       }
     }
 
+    // 감정/표현 분석
+    const positiveKeywords = [
+      '좋아', '최고', '고마워', '사랑', '행복', '즐거', '멋있', '예쁘', '귀여',
+      '대박', '완벽', '훌륭', '좋다', '좋은', '좋게'
+    ];
+    const negativeKeywords = [
+      '싫어', '안돼', '아니', '화나', '슬프', '힘들', '짜증', '불편', '나쁘',
+      '안좋', '미워', '싫다', '싫은'
+    ];
+    const questionKeywords = [
+      '?', '뭐', '어디', '언제', '누구', '왜', '어떻게', '무엇', '어떤', '몇'
+    ];
+    const exclamationKeywords =
+        ['와', '헐', '대박', '와우', '오', '와!', '헐!', '!'];
+
+    for (const keyword of positiveKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        const count = positiveExpressions.get(message.name) || 0;
+        positiveExpressions.set(message.name, count + 1);
+        break;  // 한 메시지당 한 번만 카운트
+      }
+    }
+    for (const keyword of negativeKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        const count = negativeExpressions.get(message.name) || 0;
+        negativeExpressions.set(message.name, count + 1);
+        break;
+      }
+    }
+    for (const keyword of questionKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        const count = questionExpressions.get(message.name) || 0;
+        questionExpressions.set(message.name, count + 1);
+        break;
+      }
+    }
+    for (const keyword of exclamationKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        const count = exclamationExpressions.get(message.name) || 0;
+        exclamationExpressions.set(message.name, count + 1);
+        break;
+      }
+    }
+
+    // 시간대별 활동 패턴 (새벽, 아침, 점심, 오후, 저녁, 밤)
+    let timeSlot = '';
+    if (hour >= 0 && hour < 6) {
+      timeSlot = '새벽 (0-5시)';
+    } else if (hour >= 6 && hour < 12) {
+      timeSlot = '아침 (6-11시)';
+    } else if (hour >= 12 && hour < 14) {
+      timeSlot = '점심 (12-13시)';
+    } else if (hour >= 14 && hour < 18) {
+      timeSlot = '오후 (14-17시)';
+    } else if (hour >= 18 && hour < 22) {
+      timeSlot = '저녁 (18-21시)';
+    } else {
+      timeSlot = '밤 (22-23시)';
+    }
+    if (timeSlot) {
+      const count = messagesByTimeSlot.get(timeSlot) || 0;
+      messagesByTimeSlot.set(timeSlot, count + 1);
+    }
+
+    // 메시지 길이 패턴
+    const hasNewline = message.message.includes('\n');
+    const lengthDetail = messageLengthByParticipantDetail.get(message.name) ||
+        {oneLine: 0, short: 0, medium: 0, long: 0, veryLong: 0};
+    if (!hasNewline && msgLength > 0) {
+      lengthDetail.oneLine++;
+    }
+    if (msgLength <= 5) {
+      lengthDetail.short ++;
+    } else if (msgLength <= 50) {
+      lengthDetail.medium++;
+    } else if (msgLength <= 100) {
+      lengthDetail.long ++;
+    } else {
+      lengthDetail.veryLong++;
+    }
+    messageLengthByParticipantDetail.set(message.name, lengthDetail);
+
     const currentMessageTime = parseDateTime(message.date, message.time);
+
+    // 대화 주도자 계산 (이전 메시지와 1시간 이상 간격이면 대화 시작)
+    const CONVERSATION_START_THRESHOLD_MS = 60 * 60 * 1000;  // 1시간
+    if (lastMessageTime && currentMessageTime) {
+      const timeDiff = currentMessageTime.getTime() - lastMessageTime.getTime();
+      if (timeDiff >= CONVERSATION_START_THRESHOLD_MS) {
+        const count = conversationStartersCount.get(message.name) || 0;
+        conversationStartersCount.set(message.name, count + 1);
+      }
+    } else if (!lastMessageTime) {
+      // 첫 메시지는 대화 시작으로 간주
+      const count = conversationStartersCount.get(message.name) || 0;
+      conversationStartersCount.set(message.name, count + 1);
+    }
 
     if (message.name === lastSender && currentMessageTime && lastMessageTime) {
       const timeDiff = currentMessageTime.getTime() - lastMessageTime.getTime();
@@ -499,6 +615,143 @@ function analyzeChat(
     }
   }
 
+  // 대화 종료자 계산 (메시지 후 24시간 동안 아무도 메시지를 보내지 않으면 종료)
+  const CONVERSATION_END_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24시간
+  for (let i = 0; i < messages.length; i++) {
+    const currentMessage = messages[i];
+    const currentTime = currentMessage.timestamp;
+    let isEnd = true;
+
+    // 다음 메시지가 24시간 이내에 있으면 종료가 아님
+    for (let j = i + 1; j < messages.length; j++) {
+      const nextMessage = messages[j];
+      const timeDiff = nextMessage.timestamp.getTime() - currentTime.getTime();
+      if (timeDiff > 0 && timeDiff <= CONVERSATION_END_THRESHOLD_MS) {
+        isEnd = false;
+        break;
+      }
+      // 24시간을 넘어가면 더 이상 확인할 필요 없음
+      if (timeDiff > CONVERSATION_END_THRESHOLD_MS) {
+        break;
+      }
+    }
+
+    if (isEnd) {
+      const count = conversationEndersCount.get(currentMessage.name) || 0;
+      conversationEndersCount.set(currentMessage.name, count + 1);
+    }
+  }
+
+  // 대화 주도자/종료자 Top 20
+  const conversationStarters = Array.from(conversationStartersCount.entries())
+                                   .map(([name, count]) => ({name, count}))
+                                   .sort((a, b) => b.count - a.count)
+                                   .slice(0, 20);
+  const conversationEnders = Array.from(conversationEndersCount.entries())
+                                 .map(([name, count]) => ({name, count}))
+                                 .sort((a, b) => b.count - a.count)
+                                 .slice(0, 20);
+
+  // 감정/표현 분석 Top 20
+  const positiveTop = Array.from(positiveExpressions.entries())
+                          .map(([name, count]) => ({name, count}))
+                          .sort((a, b) => b.count - a.count)
+                          .slice(0, 20);
+  const negativeTop = Array.from(negativeExpressions.entries())
+                          .map(([name, count]) => ({name, count}))
+                          .sort((a, b) => b.count - a.count)
+                          .slice(0, 20);
+  const questionTop = Array.from(questionExpressions.entries())
+                          .map(([name, count]) => ({name, count}))
+                          .sort((a, b) => b.count - a.count)
+                          .slice(0, 20);
+  const exclamationTop = Array.from(exclamationExpressions.entries())
+                             .map(([name, count]) => ({name, count}))
+                             .sort((a, b) => b.count - a.count)
+                             .slice(0, 20);
+
+  // 시간대별 활동 패턴
+  const totalMessagesForTimeSlot = Array.from(messagesByTimeSlot.values())
+                                       .reduce((sum, count) => sum + count, 0);
+  const activityByTimeSlot =
+      Array.from(messagesByTimeSlot.entries())
+          .map(([slot, count]) => ({
+                 slot,
+                 count,
+                 percentage: totalMessagesForTimeSlot > 0 ?
+                     (count / totalMessagesForTimeSlot * 100) :
+                     0
+               }))
+          .sort((a, b) => b.count - a.count);
+
+  // 메시지 길이 패턴
+  let oneLineCount = 0;
+  let shortCount = 0;
+  let mediumCount = 0;
+  let longCount = 0;
+  let veryLongCount = 0;
+  for (const detail of messageLengthByParticipantDetail.values()) {
+    oneLineCount += detail.oneLine;
+    shortCount += detail.short;
+    mediumCount += detail.medium;
+    longCount += detail.long;
+    veryLongCount += detail.veryLong;
+  }
+  const messageLengthByParticipantDetailArray =
+      Array.from(messageLengthByParticipantDetail.entries())
+          .map(([name, detail]) => ({
+                 name,
+                 oneLine: detail.oneLine,
+                 short: detail.short,
+                 medium: detail.medium,
+                 long: detail.long,
+                 veryLong: detail.veryLong
+               }))
+          .sort((a, b) => {
+            const totalA = a.oneLine + a.short + a.medium + a.long + a.veryLong;
+            const totalB = b.oneLine + b.short + b.medium + b.long + b.veryLong;
+            return totalB - totalA;
+          })
+          .slice(0, 20);
+
+  // 대화 밀도 분석
+  const dateArray = Array.from(messagesByDate.entries())
+                        .map(([date, count]) => ({date, count}))
+                        .sort((a, b) => a.date.localeCompare(b.date));
+  const totalDays = dateArray.length;
+  const activeDays = dateArray.filter(d => d.count > 0).length;
+  const avgMessagesPerDay = totalDays > 0 ? messages.length / totalDays : 0;
+
+  let mostActiveDay = {date: '', count: 0};
+  let quietestDay = {date: '', count: Infinity};
+  for (const {date, count} of dateArray) {
+    if (count > mostActiveDay.count) {
+      mostActiveDay = {date, count};
+    }
+    if (count < quietestDay.count && count > 0) {
+      quietestDay = {date, count};
+    }
+  }
+  if (quietestDay.count === Infinity) {
+    quietestDay = {date: dateArray[0]?.date || '', count: 0};
+  }
+
+  // 가장 긴 공백 기간 계산
+  let longestGap = {days: 0, startDate: '', endDate: ''};
+  for (let i = 0; i < dateArray.length - 1; i++) {
+    const currentDate = new Date(dateArray[i].date);
+    const nextDate = new Date(dateArray[i + 1].date);
+    const daysDiff = Math.floor(
+        (nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff > longestGap.days) {
+      longestGap = {
+        days: daysDiff,
+        startDate: dateArray[i].date,
+        endDate: dateArray[i + 1].date
+      };
+    }
+  }
+
   // 날짜 범위 계산 (필터링 전 모든 메시지)
   // 전체 메시지를 파싱하여 날짜 범위 계산 (첫 분석 시에만 필요)
   let minDate: Date|null = null;
@@ -538,8 +791,6 @@ function analyzeChat(
       topMentioned,
       topCrying,
       topLaughing,
-      longestMessage,
-      shortestMessage,
       avgMessageLengthByParticipant,
       topWords,
       lateNightParticipants,
@@ -547,7 +798,32 @@ function analyzeChat(
       photoSharing,
       videoSharing,
       linkSharing,
-      keywordMentions: keywordMentionsResult
+      keywordMentions: keywordMentionsResult,
+      conversationStarters,
+      conversationEnders,
+      emotionAnalysis: {
+        positive: positiveTop,
+        negative: negativeTop,
+        questions: questionTop,
+        exclamations: exclamationTop
+      },
+      activityByTimeSlot,
+      messageLengthPattern: {
+        oneLine: oneLineCount,
+        short: shortCount,
+        medium: mediumCount,
+        long: longCount,
+        veryLong: veryLongCount,
+        byParticipant: messageLengthByParticipantDetailArray
+      },
+      conversationDensity: {
+        avgMessagesPerDay: Math.round(avgMessagesPerDay * 10) / 10,
+        mostActiveDay,
+        quietestDay,
+        longestGap,
+        activeDays,
+        totalDays
+      }
     },
     allMessages: allMessagesForRange,
     dateRange: {min: minDate || new Date(), max: maxDate || new Date()}
@@ -744,36 +1020,13 @@ function renderStatistics(stats: Statistics): string {
     </div>
   `;
 
-  // 메시지 길이 기록
-  html += `
-    <div class="stat-section">
-      <h2>📏 메시지 길이 기록</h2>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="value">${
-      stats.longestMessage.length.toLocaleString()}자</div>
-          <div class="label">가장 긴 메시지</div>
-          <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-            작성자: ${stats.longestMessage.name}<br>
-            <div class="message-preview">${stats.longestMessage.message}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="value">${stats.shortestMessage.length}자</div>
-          <div class="label">가장 짧은 메시지</div>
-          <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-            작성자: ${stats.shortestMessage.name}<br>
-            <div class="message-preview">${stats.shortestMessage.message}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
   // 연속 메시지
   html += `
     <div class="stat-section">
-      <h2>💬 연속 메시지(스팸) 최고 기록 (Top 20)</h2>
+      <h2>💬 연속 메시지 최고 기록 (Top 20)</h2>
+      <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+        같은 사람이 5분 이내에 연속으로 보낸 메시지의 최대 개수입니다.
+      </p>
       <div class="table-container">
         <table>
           <thead>
@@ -797,6 +1050,357 @@ function renderStatistics(stats: Statistics): string {
   html += `
           </tbody>
         </table>
+      </div>
+    </div>
+  `;
+
+  // 대화 주도자와 종료자
+  html += `
+    <div class="stat-section">
+      <h2>🎯 대화 주도자 & 종료자 (Top 20)</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div>
+          <h3 style="margin-bottom: 10px; color: #4CAF50;">🚀 대화 주도자</h3>
+          <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+            이전 메시지와 1시간 이상 간격이 있을 때 대화를 시작한 사람입니다.
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>시작 횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.conversationStarters.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 10px; color: #FF9800;">🏁 대화 종료자</h3>
+          <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+            메시지 후 24시간 동안 아무도 메시지를 보내지 않아 대화를 종료한 사람입니다.
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>종료 횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.conversationEnders.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 감정/표현 분석
+  html += `
+    <div class="stat-section">
+      <h2>😊 감정/표현 분석 (Top 20)</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h3 style="margin-bottom: 10px; color: #4CAF50;">✨ 긍정 표현</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.emotionAnalysis.positive.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 10px; color: #F44336;">😢 부정 표현</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.emotionAnalysis.negative.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 10px; color: #2196F3;">❓ 질문 표현</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.emotionAnalysis.questions.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom: 10px; color: #FF9800;">🎉 감탄사</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>이름</th>
+                  <th>횟수</th>
+                </tr>
+              </thead>
+              <tbody>
+  `;
+  stats.emotionAnalysis.exclamations.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.count.toLocaleString()}회</td>
+      </tr>
+    `;
+  });
+  html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 시간대별 활동 패턴
+  html += `
+    <div class="stat-section">
+      <h2>🕐 시간대별 활동 패턴</h2>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>시간대</th>
+              <th>메시지 수</th>
+              <th>비율</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+  stats.activityByTimeSlot.forEach((slot) => {
+    html += `
+      <tr>
+        <td class="name">${slot.slot}</td>
+        <td class="count">${slot.count.toLocaleString()}개</td>
+        <td class="count">${slot.percentage.toFixed(1)}%</td>
+      </tr>
+    `;
+  });
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // 메시지 길이 패턴
+  const totalLengthMessages = stats.messageLengthPattern.oneLine +
+      stats.messageLengthPattern.short + stats.messageLengthPattern.medium +
+      stats.messageLengthPattern.long + stats.messageLengthPattern.veryLong;
+  html += `
+    <div class="stat-section">
+      <h2>📏 메시지 길이 패턴</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="value">${
+      stats.messageLengthPattern.oneLine.toLocaleString()}</div>
+          <div class="label">한 줄 메시지 (${
+      totalLengthMessages > 0 ?
+          ((stats.messageLengthPattern.oneLine / totalLengthMessages) * 100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.messageLengthPattern.short.toLocaleString()}</div>
+          <div class="label">짧은 메시지 (5자 이하) (${
+      totalLengthMessages > 0 ?
+          ((stats.messageLengthPattern.short / totalLengthMessages) * 100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.messageLengthPattern.medium.toLocaleString()}</div>
+          <div class="label">중간 메시지 (6-50자) (${
+      totalLengthMessages > 0 ?
+          ((stats.messageLengthPattern.medium / totalLengthMessages) * 100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.messageLengthPattern.long.toLocaleString()}</div>
+          <div class="label">긴 메시지 (51-100자) (${
+      totalLengthMessages > 0 ?
+          ((stats.messageLengthPattern.long / totalLengthMessages) * 100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.messageLengthPattern.veryLong.toLocaleString()}</div>
+          <div class="label">매우 긴 메시지 (100자 이상) (${
+      totalLengthMessages > 0 ?
+          ((stats.messageLengthPattern.veryLong / totalLengthMessages) * 100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+      </div>
+      <h3 style="margin-top: 30px; margin-bottom: 15px;">참여자별 메시지 길이 패턴 (Top 20)</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th>이름</th>
+              <th>한 줄</th>
+              <th>짧은</th>
+              <th>중간</th>
+              <th>긴</th>
+              <th>매우 긴</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+  stats.messageLengthPattern.byParticipant.forEach((person, index) => {
+    html += `
+      <tr>
+        <td class="rank">${index + 1}</td>
+        <td class="name">${person.name}</td>
+        <td class="count">${person.oneLine.toLocaleString()}</td>
+        <td class="count">${person.short.toLocaleString()}</td>
+        <td class="count">${person.medium.toLocaleString()}</td>
+        <td class="count">${person.long.toLocaleString()}</td>
+        <td class="count">${person.veryLong.toLocaleString()}</td>
+      </tr>
+    `;
+  });
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // 대화 밀도 분석
+  html += `
+    <div class="stat-section">
+      <h2>📊 대화 밀도 분석</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="value">${
+      stats.conversationDensity.avgMessagesPerDay.toLocaleString()}</div>
+          <div class="label">하루 평균 메시지 수</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.conversationDensity.activeDays.toLocaleString()}일</div>
+          <div class="label">활동한 날 (${
+      stats.conversationDensity.totalDays > 0 ?
+          ((stats.conversationDensity.activeDays /
+            stats.conversationDensity.totalDays) *
+           100)
+              .toFixed(1) :
+          0}%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.conversationDensity.mostActiveDay.count.toLocaleString()}개</div>
+          <div class="label">가장 활발한 날<br><span style="font-size: 0.8em; color: #666;">${
+      stats.conversationDensity.mostActiveDay.date}</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.conversationDensity.quietestDay.count.toLocaleString()}개</div>
+          <div class="label">가장 조용한 날<br><span style="font-size: 0.8em; color: #666;">${
+      stats.conversationDensity.quietestDay.date}</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="value">${
+      stats.conversationDensity.longestGap.days.toLocaleString()}일</div>
+          <div class="label">가장 긴 공백 기간<br><span style="font-size: 0.8em; color: #666;">${
+      stats.conversationDensity.longestGap.startDate} ~ ${
+      stats.conversationDensity.longestGap.endDate}</span></div>
+        </div>
       </div>
     </div>
   `;
