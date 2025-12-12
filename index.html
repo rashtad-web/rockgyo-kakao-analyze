@@ -32,6 +32,7 @@
       color: white;
       padding: 40px;
       text-align: center;
+      position: relative;
     }
 
     .header h1 {
@@ -42,6 +43,34 @@
     .header p {
       opacity: 0.9;
       font-size: 1.1em;
+    }
+
+    .youtube-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+      line-height: 0;
+    }
+
+    .youtube-button img {
+      height: 32px;
+      width: auto;
+      display: block;
+    }
+
+    .youtube-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.6);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
     .upload-section {
@@ -316,6 +345,9 @@
 <body>
   <div class="container">
     <div class="header">
+      <a href="https://www.youtube.com/@Rock-Gyo" target="_blank" rel="noopener noreferrer" class="youtube-button">
+        <img src="images/Youtube_logo.png" alt="RockGyo Youtube" />
+      </a>
       <h1>💬 카카오톡 채팅 통계 분석기 v1.1</h1>
       <p>카카오톡 채팅 내보내기 파일을 업로드하여 통계를 확인하세요</p>
     </div>
@@ -392,7 +424,7 @@
     <div class="results" id="results"></div>
   </div>
 
-  <script type="module" src="dist/analyze_chat.js?v=1765552672015"></script>
+  <script type="module" src="dist/analyze_chat.js?v=1765564910091"></script>
 </body>
 </html>
 
