@@ -227,9 +227,21 @@
       color: white;
     }
 
+    th {
+      text-align: center;
+    }
+
     th, td {
       padding: 15px;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    td {
       text-align: left;
+    }
+
+    th:last-child, td:last-child {
+      border-right: none;
     }
 
     tbody tr {
@@ -247,7 +259,9 @@
     .rank {
       font-weight: bold;
       color: #667eea;
-      width: 50px;
+      width: 80px;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .name {
@@ -448,7 +462,7 @@
     <div class="results" id="results"></div>
   </div>
 
-  <script type="module" src="dist/analyze_chat.js?v=1765565358374"></script>
+  <script type="module" src="dist/analyze_chat.js?v=1765565944602"></script>
 </body>
 </html>
 
