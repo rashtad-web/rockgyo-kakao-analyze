@@ -1,0 +1,17 @@
+{
+  "name": "rockgyo-2025",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && node update-version.js",
+    "serve": "yarn build && yarn http-server . -p 3000 -o",
+    "dev": "yarn build && yarn http-server . -p 3000 -o"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "http-server": "^14.1.1",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
